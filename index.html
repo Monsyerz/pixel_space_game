@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050711">
+  <title>Pixel Space Assault</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="app">
+    <canvas id="game" width="800" height="600" aria-label="Pixelowa gra kosmiczna"></canvas>
+
+    <div id="hud" class="hidden" aria-live="polite">
+      <div id="hudTop">
+        <span id="stageText">STAGE 1-1</span>
+        <span id="hpText">HP 5/5</span>
+        <span id="scoreText">SCORE 0</span>
+        <span id="coinHud">COINS 0</span>
+      </div>
+      <div id="mobileHint">TRZYMAJ I PRZESUWAJ PALEC — RUCH + STRZAŁ</div>
+      <div id="hudBottom">
+        <span id="upgradeText">M0 A0 R0</span>
+        <span id="progressText">ENEMIES 0/12</span>
+      </div>
+    </div>
+
+    <section id="menuScreen" class="screen">
+      <div class="coin-row">
+        <span aria-hidden="true">●</span>
+        <span class="coinValue">0</span>
+        <button id="buyCoinsButton" class="coin-plus" type="button" aria-label="Informacja o przyszłym zakupie coinów">+</button>
+      </div>
+      <h1>PIXEL SPACE<br>ASSAULT</h1>
+      <p class="subtitle">5 STAGES • 5 LEVELS • BOSS NA KOŃCU KAŻDEGO LEVELU</p>
+      <div class="menu-buttons">
+        <button id="startButton" type="button">START GAME</button>
+        <button id="shopButton" class="gold" type="button">SHOP</button>
+        <button id="statsButton" class="secondary" type="button">STATS</button>
+        <button id="quitButton" class="danger" type="button">QUIT</button>
+      </div>
+    </section>
+
+    <section id="shopScreen" class="screen hidden">
+      <div class="coin-row">
+        <span aria-hidden="true">●</span>
+        <span class="coinValue">0</span>
+      </div>
+      <div class="panel shop-panel">
+        <h2>SHOP</h2>
+        <p class="subtitle">Kupione i wybrane przedmioty są zapisywane lokalnie. Ich działanie pojawi się w przyszłych wersjach.</p>
+        <div id="shopContent"></div>
+        <div class="row">
+          <button id="shopBackButton" class="secondary" type="button">BACK</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="statsScreen" class="screen hidden">
+      <div class="panel">
+        <h2>STATS</h2>
+        <div id="statsList" class="stats-list"></div>
+        <button id="statsBackButton" class="secondary" type="button">BACK</button>
+      </div>
+    </section>
+
+    <section id="gameOverScreen" class="screen hidden">
+      <h2>GAME OVER</h2>
+      <p id="gameOverScoreText">SCORE: 0</p>
+      <p id="runCoinsText">RUN COINS: 0</p>
+      <p id="totalCoinsText">TOTAL COINS: 0</p>
+      <div class="menu-buttons">
+        <button id="retryButton" type="button">TRY AGAIN</button>
+        <button id="gameOverShopButton" class="gold" type="button">SHOP</button>
+        <button id="mainMenuButton" class="secondary" type="button">MAIN MENU</button>
+      </div>
+    </section>
+
+    <section id="winScreen" class="screen hidden">
+      <h2>GALAXY CLEARED</h2>
+      <p id="winText">Wygrałeś wszystkie 25 leveli.</p>
+      <div class="menu-buttons">
+        <button id="winMenuButton" type="button">MAIN MENU</button>
+        <button id="winShopButton" class="gold" type="button">SHOP</button>
+      </div>
+    </section>
+
+    <section id="quitScreen" class="screen hidden">
+      <h2>GAME CLOSED</h2>
+      <p class="subtitle">Przeglądarka nie pozwala stronie zamknąć karty. To jest ekran wyjścia.</p>
+      <button id="quitBackButton" class="secondary" type="button">BACK</button>
+    </section>
+
+    <section id="noticeScreen" class="screen hidden">
+      <div class="panel notice-panel">
+        <h2 id="noticeTitle">COINS</h2>
+        <p id="noticeText" class="subtitle">Zakup coinów zostanie podłączony później.</p>
+        <button id="noticeBackButton" class="secondary" type="button">BACK</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/game.js" defer></script>
+</body>
+</html>
