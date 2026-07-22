@@ -1,5 +1,7 @@
 # Pixel Space Assault
 
+> **GAME FULLY AI GENERATED**
+
 Pixel Space Assault to responsywna, pixelowa gra typu space shooter uruchamiana
 bezpośrednio w przeglądarce. Pilotujesz statek, niszczysz przeciwników, zbierasz
 coiny i ulepszenia oraz walczysz z bossem na końcu każdego levelu.
