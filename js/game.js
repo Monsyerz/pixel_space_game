@@ -11,6 +11,9 @@ const hud = document.getElementById("hud");
 const shopContent = document.getElementById("shopContent");
 const statsList = document.getElementById("statsList");
 const {
+  createDifficultyManager,
+  formatRunDistance,
+  formatRunTime,
   GAME_STATE,
   SHOP_ITEMS,
   entities,
@@ -19,6 +22,8 @@ const {
   storage
 } = window.PSA;
 
+const difficultyManager = createDifficultyManager();
+const runMetrics = difficultyManager.metrics;
 let save = storage.load();
 let noticeReturnState = GAME_STATE.MENU;
 let animationId = 0;
@@ -33,15 +38,8 @@ let drops = [];
 let particles = [];
 let boss = null;
 let player = null;
-let stage = 1;
-let level = 1;
-let score = 0;
 let runCoins = 0;
-let killsThisLevel = 0;
-let enemyTarget = 12;
 let spawnTimer = 0;
-let bossPending = false;
-let transitionTimer = 0;
 let message = "";
 let messageTimer = 0;
 
@@ -228,34 +226,28 @@ function initStars() {
 }
 
 function startRun() {
-  stage = 1;
-  level = 1;
-  score = 0;
+  difficultyManager.reset();
   runCoins = 0;
   player = entities.createPlayer(W, H);
   pointer.active = false;
   pointer.x = player.x;
   pointer.y = player.y;
   keys.clear();
-  resetLevel();
+  resetRunObjects();
   updateHud();
   setGameState(GAME_STATE.PLAYING);
-  message = "STAGE 1 - LEVEL 1";
+  message = "ENDLESS RUN";
   messageTimer = 1.8;
 }
 
-function resetLevel() {
+function resetRunObjects() {
   bullets = [];
   enemyBullets = [];
   enemies = [];
   drops = [];
   particles = [];
   boss = null;
-  killsThisLevel = 0;
-  enemyTarget = 10 + level * 2 + (stage - 1) * 2;
   spawnTimer = 0.6;
-  bossPending = false;
-  transitionTimer = 0;
 }
 
 function addCoins(amount) {
@@ -296,12 +288,12 @@ function nearestTarget(x, y) {
 }
 
 function spawnEnemy() {
-  enemies.push(entities.createEnemy(W, stage, level));
+  enemies.push(entities.createEnemy(W, difficultyManager.settings));
 }
 
 function spawnBoss() {
-  boss = entities.createBoss(W, stage, level);
-  message = `BOSS ${stage}-${level}`;
+  boss = entities.createBoss(W, runMetrics.difficulty);
+  message = "BOSS";
   messageTimer = 1.5;
 }
 
@@ -346,7 +338,7 @@ function damagePlayer(amount = 1) {
   player.hp -= amount;
   player.invincible = 1.1;
   explode(player.x, player.y, 18);
-  if (player.hp <= 0) endRun(false);
+  if (player.hp <= 0) endRun();
 }
 
 function killEnemy(index) {
@@ -354,71 +346,34 @@ function killEnemy(index) {
   explode(enemy.x, enemy.y, 12);
   dropUpgrade(enemy.x, enemy.y);
   enemies.splice(index, 1);
-  killsThisLevel++;
   save.totalKills++;
-  score += 100 * stage;
+  difficultyManager.addScore(100);
   addCoins(1);
 }
 
 function defeatBoss() {
-  const completedStage = level === 5;
   explode(boss.x, boss.y, 55);
   boss = null;
   save.bossesDefeated++;
   save.totalKills++;
-  score += 2500 * stage;
+  difficultyManager.addScore(2500);
   addCoins(10);
-  if (completedStage) addCoins(100);
-  save.highScore = Math.max(save.highScore, score);
+  save.highScore = Math.max(save.highScore, runMetrics.score);
   persistSave();
-  transitionTimer = 2.1;
-  message = completedStage ? "STAGE CLEAR +110" : "LEVEL CLEAR +10";
+  message = "BOSS DEFEATED +10";
   messageTimer = 2;
 }
 
-function updateHighestProgress() {
-  if (stage > save.highestStage) {
-    save.highestStage = stage;
-    save.highestLevel = level;
-  } else if (stage === save.highestStage) {
-    save.highestLevel = Math.max(save.highestLevel, level);
-  }
-}
-
-function advanceLevel() {
-  if (level < 5) {
-    level++;
-  } else if (stage < 5) {
-    stage++;
-    level = 1;
-  } else {
-    endRun(true);
-    return;
-  }
-
-  updateHighestProgress();
-  persistSave();
-  resetLevel();
-  player.x = W / 2;
-  player.y = H - 80;
-  message = `STAGE ${stage} - LEVEL ${level}`;
-  messageTimer = 1.8;
-}
-
-function endRun(won) {
-  save.highScore = Math.max(save.highScore, score);
-  updateHighestProgress();
+function endRun() {
+  save.highScore = Math.max(save.highScore, runMetrics.score);
   persistSave();
 
-  if (won) {
-    document.getElementById("winText").textContent = `Wygrałeś wszystkie 25 leveli. Score: ${score}. Run coins: ${runCoins}.`;
-    setGameState(GAME_STATE.VICTORY);
-  } else {
-    document.getElementById("gameOverScoreText").textContent = `SCORE: ${score}`;
-    document.getElementById("runCoinsText").textContent = `RUN COINS: ${runCoins}`;
-    document.getElementById("totalCoinsText").textContent = `TOTAL COINS: ${save.coins}`;
-    setGameState(GAME_STATE.GAME_OVER);
-  }
+  document.getElementById("gameOverScoreText").textContent = `SCORE: ${runMetrics.score.toLocaleString("en-US")}`;
+  document.getElementById("gameOverDistanceText").textContent = `DISTANCE: ${formatRunDistance(runMetrics.distance)}`;
+  document.getElementById("gameOverTimeText").textContent = `SURVIVAL TIME: ${formatRunTime(runMetrics.survivalTime)}`;
+  document.getElementById("runCoinsText").textContent = `RUN COINS: ${runCoins}`;
+  document.getElementById("totalCoinsText").textContent = `TOTAL COINS: ${save.coins}`;
+  setGameState(GAME_STATE.GAME_OVER);
 }
 
 function updateStars(dt) {
@@ -508,12 +463,12 @@ function updateEnemyBullets(dt) {
 }
 
 function updateEnemySpawning(dt) {
-  if (boss || bossPending || killsThisLevel >= enemyTarget || transitionTimer > 0) return;
+  if (boss) return;
 
   spawnTimer -= dt;
-  if (spawnTimer <= 0 && enemies.length < 7) {
+  if (spawnTimer <= 0 && enemies.length < difficultyManager.settings.maximumEnemies) {
     spawnEnemy();
-    spawnTimer = Math.max(0.25, 0.92 - stage * 0.08 - level * 0.035);
+    spawnTimer = difficultyManager.settings.spawnInterval;
   }
 }
 
@@ -529,8 +484,10 @@ function updateEnemies(dt) {
     if (enemy.type === "shooter") {
       enemy.shootTimer -= dt;
       if (enemy.shootTimer <= 0 && enemy.y > 20) {
-        shootAtPlayer(enemy, 220 + stage * 15);
-        enemy.shootTimer = Math.max(0.6, 1.65 - stage * 0.12);
+        if (enemyBullets.length < difficultyManager.settings.maximumEnemyBullets) {
+          shootAtPlayer(enemy, difficultyManager.settings.enemyProjectileSpeed);
+        }
+        enemy.shootTimer = difficultyManager.settings.shooterCooldown;
       }
     }
 
@@ -572,26 +529,6 @@ function resolvePlayerBulletHits() {
   enemies = enemies.filter(enemy => !enemy.dead);
 }
 
-function updateLevelTransitions(dt) {
-  if (!boss && killsThisLevel >= enemyTarget && enemies.length === 0 && transitionTimer <= 0) {
-    bossPending = true;
-    transitionTimer = 1.2;
-    message = "WARNING: BOSS";
-    messageTimer = 1.2;
-  }
-
-  if (bossPending) {
-    transitionTimer -= dt;
-    if (transitionTimer <= 0) {
-      bossPending = false;
-      spawnBoss();
-    }
-  } else if (transitionTimer > 0 && !boss) {
-    transitionTimer -= dt;
-    if (transitionTimer <= 0 && gameState.is(GAME_STATE.PLAYING)) advanceLevel();
-  }
-}
-
 function updateBoss(dt) {
   if (!boss) return;
 
@@ -601,12 +538,14 @@ function updateBoss(dt) {
   boss.shootTimer -= dt;
 
   if (boss.shootTimer <= 0) {
-    const count = 3 + Math.min(4, stage);
+    const count = 3 + Math.min(4, Math.floor(runMetrics.difficulty / 2));
     for (let i = 0; i < count; i++) {
       const spread = (i - (count - 1) / 2) * 0.18;
-      shootAtPlayer(boss, 225 + stage * 18, spread);
+      if (enemyBullets.length < difficultyManager.settings.maximumEnemyBullets) {
+        shootAtPlayer(boss, difficultyManager.settings.enemyProjectileSpeed, spread);
+      }
     }
-    boss.shootTimer = Math.max(0.42, 1.05 - stage * 0.09 - level * 0.035);
+    boss.shootTimer = Math.max(0.5, 1.05 - (runMetrics.difficulty - 1) * 0.06);
   }
 
   if (entities.hit(boss, player)) damagePlayer(2);
@@ -643,6 +582,7 @@ function update(dt) {
 
   if (!gameState.is(GAME_STATE.PLAYING) || !player) return;
 
+  difficultyManager.update(dt);
   updatePlayer(dt);
   updatePlayerBullets(dt);
   updateEnemyBullets(dt);
@@ -651,7 +591,6 @@ function update(dt) {
   updateEnemies(dt);
   resolvePlayerBulletHits();
   if (!gameState.is(GAME_STATE.PLAYING)) return;
-  updateLevelTransitions(dt);
   updateBoss(dt);
   updateDrops(dt);
   updateParticles(dt);
@@ -802,14 +741,12 @@ function draw() {
 
 function updateHud() {
   if (!player) return;
-  document.getElementById("stageText").textContent = `STAGE ${stage}-${level}`;
+  document.getElementById("distanceText").textContent = `DISTANCE ${formatRunDistance(runMetrics.distance)}`;
   document.getElementById("hpText").textContent = `HP ${Math.max(0, player.hp)}/${player.maxHp}`;
-  document.getElementById("scoreText").textContent = `SCORE ${score}`;
-  document.getElementById("coinHud").textContent = `COINS ${save.coins}`;
+  document.getElementById("scoreText").textContent = `SCORE ${runMetrics.score.toLocaleString("en-US")}`;
+  document.getElementById("multiplierText").textContent = `MULTIPLIER x${runMetrics.multiplier}`;
   document.getElementById("upgradeText").textContent = `M${player.multi} A${player.aim} R${player.rapid}`;
-  document.getElementById("progressText").textContent = boss
-    ? "BOSS FIGHT"
-    : `ENEMIES ${killsThisLevel}/${enemyTarget}`;
+  document.getElementById("runStatusText").textContent = `TIME ${formatRunTime(runMetrics.survivalTime)} • COINS ${save.coins}`;
 }
 
 function loop(now) {

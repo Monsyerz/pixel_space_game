@@ -21,6 +21,18 @@
 
   PSA.SAVE_KEY = "pixelSpaceAssaultSaveV2";
 
+  PSA.ENDLESS_BALANCE = Object.freeze({
+    difficultyGrowthRate: 1 / 75,
+    maximumDifficulty: 8,
+    baseDistanceRate: 6,
+    distanceDifficultyBonus: 0.15,
+    minimumSpawnInterval: 0.42,
+    maximumEnemySpeedMultiplier: 1.5,
+    maximumEnemyProjectileSpeed: 320,
+    maximumSimultaneousEnemies: 11,
+    maximumEnemyBullets: 80
+  });
+
   PSA.SHOP_ITEMS = Object.freeze([
     {
       id: "weapon-pulse-blaster",

@@ -33,15 +33,14 @@
     };
   }
 
-  function createEnemy(width, stage, level) {
-    const difficulty = stage + level * 0.35;
+  function createEnemy(width, settings) {
     const typeRoll = Math.random();
-    const type = typeRoll < 0.18 + stage * 0.025
+    const type = typeRoll < settings.zigzagChance
       ? "zigzag"
-      : typeRoll < 0.35
+      : typeRoll < settings.zigzagChance + settings.shooterChance
         ? "shooter"
         : "basic";
-    const hp = Math.ceil(1 + stage * 0.35 + level * 0.12);
+    const hp = 2;
     const x = 40 + Math.random() * (width - 80);
 
     return {
@@ -52,15 +51,15 @@
       h: 22,
       hp,
       maxHp: hp,
-      speed: 70 + difficulty * 12 + Math.random() * 35,
+      speed: (86 + Math.random() * 35) * settings.enemySpeedMultiplier,
       type,
       age: 0,
       shootTimer: 1.1 + Math.random() * 1.5
     };
   }
 
-  function createBoss(width, stage, level) {
-    const hp = 34 + stage * 16 + level * 8;
+  function createBoss(width, difficulty) {
+    const hp = 58;
     return {
       x: width / 2,
       y: 92,
@@ -69,7 +68,7 @@
       hp,
       maxHp: hp,
       dir: 1,
-      speed: 90 + stage * 10,
+      speed: 100 * Math.min(1.25, 1 + (difficulty - 1) * 0.03),
       shootTimer: 0.8,
       age: 0
     };

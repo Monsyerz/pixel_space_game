@@ -13,15 +13,15 @@
 
     <div id="hud" class="hidden" aria-live="polite">
       <div id="hudTop">
-        <span id="stageText">STAGE 1-1</span>
-        <span id="hpText">HP 5/5</span>
         <span id="scoreText">SCORE 0</span>
-        <span id="coinHud">COINS 0</span>
+        <span id="distanceText">DISTANCE 0 km</span>
+        <span id="multiplierText">MULTIPLIER x1</span>
+        <span id="hpText">HP 5/5</span>
       </div>
       <div id="mobileHint">TRZYMAJ I PRZESUWAJ PALEC — RUCH + STRZAŁ</div>
       <div id="hudBottom">
         <span id="upgradeText">M0 A0 R0</span>
-        <span id="progressText">ENEMIES 0/12</span>
+        <span id="runStatusText">TIME 00:00 • COINS 0</span>
       </div>
     </div>
 
@@ -32,7 +32,7 @@
         <button id="buyCoinsButton" class="coin-plus" type="button" aria-label="Informacja o przyszłym zakupie coinów">+</button>
       </div>
       <h1>PIXEL SPACE<br>ASSAULT</h1>
-      <p class="subtitle">5 STAGES • 5 LEVELS • BOSS NA KOŃCU KAŻDEGO LEVELU</p>
+      <p class="subtitle">ENDLESS RUN • SURVIVE AS LONG AS YOU CAN</p>
       <div class="menu-buttons">
         <button id="startButton" type="button">START GAME</button>
         <button id="shopButton" class="gold" type="button">SHOP</button>
@@ -67,6 +67,8 @@
     <section id="gameOverScreen" class="screen hidden">
       <h2>GAME OVER</h2>
       <p id="gameOverScoreText">SCORE: 0</p>
+      <p id="gameOverDistanceText">DISTANCE: 0 km</p>
+      <p id="gameOverTimeText">SURVIVAL TIME: 00:00</p>
       <p id="runCoinsText">RUN COINS: 0</p>
       <p id="totalCoinsText">TOTAL COINS: 0</p>
       <div class="menu-buttons">
