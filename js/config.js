@@ -33,6 +33,89 @@
     maximumEnemyBullets: 80
   });
 
+  PSA.ENCOUNTER_DEFINITIONS = Object.freeze([
+    Object.freeze({
+      id: "enemy-swarm",
+      name: "ENEMY SWARM",
+      kind: "combat",
+      pattern: "swarm",
+      baseWeight: 30,
+      difficultyWeight: -0.5,
+      baseCount: 5,
+      countPerDifficulty: 0.5,
+      maximumCount: 9,
+      spawnSpacing: 0.42,
+      speedMultiplier: 1,
+      recoveryTime: 1.2,
+      intense: false
+    }),
+    Object.freeze({
+      id: "fast-formation",
+      name: "FAST FORMATION",
+      kind: "combat",
+      pattern: "fast",
+      baseWeight: 20,
+      difficultyWeight: 0.35,
+      baseCount: 4,
+      countPerDifficulty: 0.35,
+      maximumCount: 7,
+      spawnSpacing: 0.28,
+      speedMultiplier: 1.32,
+      recoveryTime: 1.3,
+      intense: false
+    }),
+    Object.freeze({
+      id: "heavy-formation",
+      name: "HEAVY FORMATION",
+      kind: "combat",
+      pattern: "heavy",
+      baseWeight: 15,
+      difficultyWeight: 0.9,
+      baseCount: 3,
+      countPerDifficulty: 0.25,
+      maximumCount: 5,
+      spawnSpacing: 0.8,
+      speedMultiplier: 0.84,
+      recoveryTime: 1.8,
+      intense: true
+    }),
+    Object.freeze({
+      id: "elite-enemy",
+      name: "ELITE SIGNAL",
+      kind: "combat",
+      pattern: "elite",
+      baseWeight: 10,
+      difficultyWeight: 0.75,
+      baseCount: 1,
+      countPerDifficulty: 0,
+      maximumCount: 1,
+      spawnSpacing: 0,
+      speedMultiplier: 1.18,
+      recoveryTime: 1.8,
+      intense: true
+    }),
+    Object.freeze({
+      id: "supply-zone",
+      name: "SUPPLY ZONE",
+      kind: "supply",
+      baseWeight: 10,
+      difficultyWeight: 0,
+      duration: 7,
+      recoveryTime: 0.8,
+      intense: false
+    }),
+    Object.freeze({
+      id: "quiet-space",
+      name: "QUIET SPACE",
+      kind: "quiet",
+      baseWeight: 15,
+      difficultyWeight: -0.7,
+      duration: 3,
+      recoveryTime: 0.6,
+      intense: false
+    })
+  ]);
+
   PSA.SHOP_ITEMS = Object.freeze([
     {
       id: "weapon-pulse-blaster",

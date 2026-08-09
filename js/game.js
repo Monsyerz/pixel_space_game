@@ -12,6 +12,8 @@ const shopContent = document.getElementById("shopContent");
 const statsList = document.getElementById("statsList");
 const {
   createDifficultyManager,
+  createEncounterManager,
+  ENCOUNTER_DEFINITIONS,
   formatRunDistance,
   formatRunTime,
   GAME_STATE,
@@ -24,6 +26,10 @@ const {
 
 const difficultyManager = createDifficultyManager();
 const runMetrics = difficultyManager.metrics;
+const encounterManager = createEncounterManager({
+  definitions: ENCOUNTER_DEFINITIONS,
+  metrics: runMetrics
+});
 let save = storage.load();
 let noticeReturnState = GAME_STATE.MENU;
 let animationId = 0;
@@ -39,7 +45,6 @@ let particles = [];
 let boss = null;
 let player = null;
 let runCoins = 0;
-let spawnTimer = 0;
 let message = "";
 let messageTimer = 0;
 
@@ -227,6 +232,7 @@ function initStars() {
 
 function startRun() {
   difficultyManager.reset();
+  encounterManager.reset();
   runCoins = 0;
   player = entities.createPlayer(W, H);
   pointer.active = false;
@@ -247,7 +253,6 @@ function resetRunObjects() {
   drops = [];
   particles = [];
   boss = null;
-  spawnTimer = 0.6;
 }
 
 function addCoins(amount) {
@@ -287,8 +292,8 @@ function nearestTarget(x, y) {
   return best;
 }
 
-function spawnEnemy() {
-  enemies.push(entities.createEnemy(W, difficultyManager.settings));
+function spawnEnemy(options = {}) {
+  enemies.push(entities.createEnemy(W, difficultyManager.settings, options));
 }
 
 function spawnBoss() {
@@ -300,6 +305,126 @@ function spawnBoss() {
 function shootAtPlayer(source, speed = 230, spread = 0) {
   enemyBullets.push(entities.createEnemyBullet(source, player, speed, spread));
 }
+
+function encounterEnemyCount(definition) {
+  const pressure = Math.max(0, runMetrics.difficulty - 1);
+  return Math.min(
+    definition.maximumCount,
+    Math.floor(definition.baseCount + pressure * definition.countPerDifficulty)
+  );
+}
+
+function encounterSpawnX(definition, index) {
+  if (definition.pattern === "fast") {
+    if (index === 0) return W / 2;
+    const step = Math.ceil(index / 2);
+    const direction = index % 2 === 0 ? 1 : -1;
+    return Math.max(50, Math.min(W - 50, W / 2 + direction * step * 82));
+  }
+
+  if (definition.pattern === "heavy") {
+    return [W * 0.25, W * 0.5, W * 0.75][index % 3];
+  }
+
+  if (definition.pattern === "elite") return W / 2;
+
+  const column = index % 5;
+  const rowOffset = Math.floor(index / 5) % 2 === 0 ? -18 : 34;
+  return Math.max(50, Math.min(W - 50, W * (0.18 + column * 0.16) + rowOffset));
+}
+
+function encounterEnemyType(definition, index, total) {
+  if (definition.pattern === "elite") return "shooter";
+  if (definition.pattern === "heavy") return index % 3 === 1 ? "basic" : "shooter";
+  if (definition.pattern === "fast") {
+    if (runMetrics.difficulty >= 4 && index === total - 1) return "shooter";
+    return index % 2 === 0 ? "zigzag" : "basic";
+  }
+  if (runMetrics.difficulty >= 5 && index % 5 === 4) return "shooter";
+  return index % 4 === 3 ? "zigzag" : "basic";
+}
+
+function spawnEncounterEnemy(definition, runtime) {
+  const elite = definition.pattern === "elite";
+  spawnEnemy({
+    x: encounterSpawnX(definition, runtime.spawned),
+    type: encounterEnemyType(definition, runtime.spawned, runtime.total),
+    speedMultiplier: definition.speedMultiplier,
+    hp: elite ? 3 : 2,
+    w: elite ? 34 : undefined,
+    h: elite ? 28 : undefined,
+    shootTimer: elite ? 0.7 : undefined,
+    fireRateMultiplier: elite ? 0.62 : definition.pattern === "heavy" ? 0.85 : 1,
+    scoreValue: elite ? 350 : 100,
+    elite
+  });
+}
+
+function startEncounter(definition) {
+  if (definition.kind === "quiet") {
+    return { remaining: definition.duration };
+  }
+
+  if (definition.kind === "supply") {
+    const rewardType = player.hp < player.maxHp ? "heal" : "coin";
+    const reward = entities.createDrop(W / 2, 145, rewardType);
+    reward.encounterReward = true;
+    drops.push(reward);
+    return { remaining: definition.duration, reward };
+  }
+
+  return {
+    spawned: 0,
+    spawnTimer: 0,
+    total: encounterEnemyCount(definition)
+  };
+}
+
+function updateEncounter(activeEncounter, dt) {
+  const { definition, runtime } = activeEncounter;
+
+  if (definition.kind === "quiet") {
+    runtime.remaining -= dt;
+    return;
+  }
+
+  if (definition.kind === "supply") {
+    runtime.remaining -= dt;
+    if (runtime.remaining <= 0) runtime.reward.dead = true;
+    return;
+  }
+
+  runtime.spawnTimer -= dt;
+
+  if (
+    runtime.spawned < runtime.total
+    && runtime.spawnTimer <= 0
+    && enemies.length < difficultyManager.settings.maximumEnemies
+  ) {
+    spawnEncounterEnemy(definition, runtime);
+    runtime.spawned++;
+    runtime.spawnTimer = definition.spawnSpacing;
+  }
+}
+
+function isEncounterComplete(activeEncounter) {
+  const { definition, runtime } = activeEncounter;
+  if (definition.kind === "quiet") return runtime.remaining <= 0;
+  if (definition.kind === "supply") {
+    return runtime.remaining <= 0 || !drops.includes(runtime.reward);
+  }
+  return runtime.spawned >= runtime.total && enemies.length === 0;
+}
+
+const encounterContext = Object.freeze({
+  isComplete: isEncounterComplete,
+  onStart(definition) {
+    message = definition.name;
+    messageTimer = 1.05;
+  },
+  start: startEncounter,
+  update: updateEncounter
+});
 
 function dropUpgrade(x, y) {
   if (Math.random() > 0.18) return;
@@ -314,6 +439,13 @@ function dropUpgrade(x, y) {
 }
 
 function applyDrop(type) {
+  if (type === "coin") {
+    addCoins(5);
+    message = "+5 COINS";
+    messageTimer = 0.8;
+    return;
+  }
+
   if (type === "multi") player.multi = Math.min(3, player.multi + 1);
   if (type === "aim") player.aim = Math.min(3, player.aim + 1);
   if (type === "rapid") player.rapid = Math.min(3, player.rapid + 1);
@@ -347,7 +479,7 @@ function killEnemy(index) {
   dropUpgrade(enemy.x, enemy.y);
   enemies.splice(index, 1);
   save.totalKills++;
-  difficultyManager.addScore(100);
+  difficultyManager.addScore(enemy.scoreValue);
   addCoins(1);
 }
 
@@ -462,16 +594,6 @@ function updateEnemyBullets(dt) {
   ));
 }
 
-function updateEnemySpawning(dt) {
-  if (boss) return;
-
-  spawnTimer -= dt;
-  if (spawnTimer <= 0 && enemies.length < difficultyManager.settings.maximumEnemies) {
-    spawnEnemy();
-    spawnTimer = difficultyManager.settings.spawnInterval;
-  }
-}
-
 function updateEnemies(dt) {
   for (const enemy of enemies) {
     enemy.age += dt;
@@ -487,7 +609,7 @@ function updateEnemies(dt) {
         if (enemyBullets.length < difficultyManager.settings.maximumEnemyBullets) {
           shootAtPlayer(enemy, difficultyManager.settings.enemyProjectileSpeed);
         }
-        enemy.shootTimer = difficultyManager.settings.shooterCooldown;
+        enemy.shootTimer = difficultyManager.settings.shooterCooldown * enemy.fireRateMultiplier;
       }
     }
 
@@ -553,6 +675,7 @@ function updateBoss(dt) {
 
 function updateDrops(dt) {
   for (const drop of drops) {
+    if (drop.dead) continue;
     drop.age += dt;
     drop.y += drop.speed * dt;
     drop.x += Math.sin(drop.age * 5) * 28 * dt;
@@ -587,7 +710,7 @@ function update(dt) {
   updatePlayerBullets(dt);
   updateEnemyBullets(dt);
   if (!gameState.is(GAME_STATE.PLAYING)) return;
-  updateEnemySpawning(dt);
+  if (!boss) encounterManager.update(dt, encounterContext);
   updateEnemies(dt);
   resolvePlayerBulletHits();
   if (!gameState.is(GAME_STATE.PLAYING)) return;
@@ -645,6 +768,13 @@ function drawEnemy(enemy) {
   ctx.fillRect(x - 5, y - 5, 4, 4);
   ctx.fillRect(x + 2, y - 5, 4, 4);
 
+  if (enemy.elite) {
+    ctx.strokeStyle = "#ffe45c";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - enemy.w / 2 - 4, y - enemy.h / 2 - 4, enemy.w + 8, enemy.h + 8);
+    ctx.lineWidth = 1;
+  }
+
   if (enemy.maxHp > 1) {
     ctx.fillStyle = "#42111b";
     ctx.fillRect(x - 12, y - 14, 24, 3);
@@ -677,8 +807,8 @@ function drawBoss() {
 }
 
 function drawDrop(drop) {
-  const labels = { multi: "M", aim: "A", rapid: "R", heal: "+" };
-  const colors = { multi: "#59ecff", aim: "#77ff90", rapid: "#ffd34e", heal: "#ff6a87" };
+  const labels = { multi: "M", aim: "A", rapid: "R", heal: "+", coin: "$" };
+  const colors = { multi: "#59ecff", aim: "#77ff90", rapid: "#ffd34e", heal: "#ff6a87", coin: "#ffd34e" };
   ctx.fillStyle = "#07101e";
   ctx.fillRect(Math.round(drop.x - 10), Math.round(drop.y - 10), 20, 20);
   ctx.strokeStyle = colors[drop.type];

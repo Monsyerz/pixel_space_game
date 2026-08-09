@@ -33,28 +33,34 @@
     };
   }
 
-  function createEnemy(width, settings) {
+  function createEnemy(width, settings, options = {}) {
     const typeRoll = Math.random();
-    const type = typeRoll < settings.zigzagChance
+    const randomType = typeRoll < settings.zigzagChance
       ? "zigzag"
       : typeRoll < settings.zigzagChance + settings.shooterChance
         ? "shooter"
         : "basic";
-    const hp = 2;
-    const x = 40 + Math.random() * (width - 80);
+    const type = options.type || randomType;
+    const hp = options.hp ?? 2;
+    const x = options.x ?? 40 + Math.random() * (width - 80);
 
     return {
       x,
       y: -30,
       baseX: x,
-      w: type === "shooter" ? 28 : 24,
-      h: 22,
+      w: options.w ?? (type === "shooter" ? 28 : 24),
+      h: options.h ?? 22,
       hp,
       maxHp: hp,
-      speed: (86 + Math.random() * 35) * settings.enemySpeedMultiplier,
+      speed: (86 + Math.random() * 35)
+        * settings.enemySpeedMultiplier
+        * (options.speedMultiplier ?? 1),
       type,
       age: 0,
-      shootTimer: 1.1 + Math.random() * 1.5
+      shootTimer: options.shootTimer ?? 1.1 + Math.random() * 1.5,
+      fireRateMultiplier: options.fireRateMultiplier ?? 1,
+      scoreValue: options.scoreValue ?? 100,
+      elite: Boolean(options.elite)
     };
   }
 

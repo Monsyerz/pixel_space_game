@@ -117,6 +117,121 @@
     });
   };
 
+  PSA.createEncounterManager = function createEncounterManager(options) {
+    const definitions = options.definitions;
+    const metrics = options.metrics;
+    const random = typeof options.random === "function" ? options.random : Math.random;
+    const initialDelay = Number.isFinite(options.initialDelay) ? options.initialDelay : 1.1;
+    const recentIds = [];
+    let phase = "delay";
+    let phaseTimer = initialDelay;
+    let activeEncounter = null;
+
+    if (!Array.isArray(definitions) || definitions.length === 0) {
+      throw new Error("EncounterManager requires encounter definitions");
+    }
+
+    function effectiveWeight(definition, difficulty) {
+      const pressure = Math.max(0, difficulty - 1);
+      let weight = Math.max(
+        0.1,
+        definition.baseWeight + pressure * definition.difficultyWeight
+      );
+
+      if (recentIds[0] === definition.id && recentIds[1] === definition.id) {
+        return 0;
+      }
+
+      if (recentIds[0] === definition.id) {
+        weight *= 0.35;
+      } else if (recentIds.includes(definition.id)) {
+        weight *= 0.7;
+      }
+
+      const previousDefinition = definitions.find(candidate => candidate.id === recentIds[0]);
+      if (previousDefinition?.intense && definition.intense) {
+        weight *= 0.45;
+      }
+
+      return weight;
+    }
+
+    function selectNext(difficulty) {
+      const weightedDefinitions = definitions.map(definition => ({
+        definition,
+        weight: effectiveWeight(definition, difficulty)
+      }));
+      const totalWeight = weightedDefinitions.reduce((total, entry) => total + entry.weight, 0);
+      let roll = random() * totalWeight;
+
+      for (const entry of weightedDefinitions) {
+        roll -= entry.weight;
+        if (roll <= 0 && entry.weight > 0) return entry.definition;
+      }
+
+      return weightedDefinitions.find(entry => entry.weight > 0)?.definition || definitions[0];
+    }
+
+    function beginEncounter(context) {
+      const definition = selectNext(metrics.difficulty);
+      activeEncounter = {
+        definition,
+        runtime: context.start(definition)
+      };
+      phase = "active";
+      context.onStart?.(definition, activeEncounter.runtime);
+    }
+
+    function completeEncounter(context) {
+      const completedEncounter = activeEncounter;
+      metrics.encountersCompleted++;
+      recentIds.unshift(completedEncounter.definition.id);
+      recentIds.length = Math.min(recentIds.length, 3);
+      activeEncounter = null;
+      phase = "recovery";
+      phaseTimer = completedEncounter.definition.recoveryTime;
+      context.onComplete?.(completedEncounter.definition, completedEncounter.runtime);
+    }
+
+    function reset() {
+      phase = "delay";
+      phaseTimer = initialDelay;
+      activeEncounter = null;
+      recentIds.length = 0;
+      metrics.encountersCompleted = 0;
+    }
+
+    function update(dt, context) {
+      const elapsed = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+
+      if (phase === "active") {
+        context.update(activeEncounter, elapsed);
+        if (context.isComplete(activeEncounter)) completeEncounter(context);
+        return;
+      }
+
+      phaseTimer -= elapsed;
+      if (phaseTimer <= 0) beginEncounter(context);
+    }
+
+    return Object.freeze({
+      get current() {
+        return activeEncounter?.definition || null;
+      },
+
+      get phase() {
+        return phase;
+      },
+
+      get recentEncounterIds() {
+        return recentIds.slice();
+      },
+
+      reset,
+      update
+    });
+  };
+
   PSA.formatRunTime = function formatRunTime(seconds) {
     const totalSeconds = Math.max(0, Math.floor(seconds));
     const minutes = Math.floor(totalSeconds / 60);
