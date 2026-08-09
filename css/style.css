@@ -200,6 +200,92 @@ button.gold {
   width: min(96%, 750px);
 }
 
+.arsenal-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.arsenal-weapon {
+  min-height: 42px;
+  padding: 7px;
+  border-color: #334a75;
+  font-size: 13px;
+}
+
+.arsenal-weapon.selected {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.arsenal-detail {
+  padding: 14px;
+  border: 2px solid #334a75;
+  background: #080f20;
+  text-align: left;
+}
+
+.arsenal-detail h3 {
+  margin-top: 0;
+}
+
+.arsenal-description {
+  margin: 7px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.arsenal-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.arsenal-stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #263759;
+  background: #0a1224;
+}
+
+.arsenal-stat div {
+  display: grid;
+  gap: 3px;
+}
+
+.arsenal-stat strong {
+  color: var(--line);
+  font-size: 13px;
+}
+
+.arsenal-level {
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.arsenal-stat small {
+  color: var(--muted);
+}
+
+.arsenal-stat button,
+.arsenal-equip {
+  min-height: 38px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.arsenal-equip {
+  width: 100%;
+  margin-top: 10px;
+  border-color: var(--success);
+  color: var(--success);
+}
+
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -331,6 +417,15 @@ button.gold {
   }
 
   .shop-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .arsenal-selector,
+  .arsenal-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .arsenal-stat {
     grid-template-columns: 1fr;
   }
 

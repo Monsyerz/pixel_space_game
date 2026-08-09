@@ -13,6 +13,7 @@ const statsList = document.getElementById("statsList");
 const {
   createDifficultyManager,
   createEncounterManager,
+  createWeaponRuntime,
   ENCOUNTER_DEFINITIONS,
   formatRunDistance,
   formatRunTime,
@@ -22,14 +23,12 @@ const {
   gameState,
   setGameState,
   storage,
-  WEAPON_DEFINITIONS
+  WEAPON_DEFINITIONS,
+  WEAPON_UPGRADE_COSTS
 } = window.PSA;
 
 const difficultyManager = createDifficultyManager();
 const runMetrics = difficultyManager.metrics;
-const weaponByShopItem = new Map(
-  Object.values(WEAPON_DEFINITIONS).map(weapon => [weapon.shopItemId, weapon])
-);
 const encounterManager = createEncounterManager({
   definitions: ENCOUNTER_DEFINITIONS,
   metrics: runMetrics
@@ -47,9 +46,11 @@ let enemies = [];
 let drops = [];
 let particles = [];
 let lightningEffects = [];
+let blastEffects = [];
 let boss = null;
 let player = null;
-let activeWeapon = WEAPON_DEFINITIONS.laser;
+let activeWeapon = createWeaponRuntime("laser", save?.weaponUpgrades);
+let arsenalWeaponId = save.selectedWeapon;
 let runCoins = 0;
 let message = "";
 let messageTimer = 0;
@@ -97,13 +98,11 @@ function openMenu() {
 }
 
 function selectedItemIdForType(type) {
-  if (type === "weapon") return save.selectedWeapon;
   if (type === "skin") return save.selectedSkin;
   return save.selectedSupport;
 }
 
 function selectItem(item) {
-  if (item.type === "weapon") save.selectedWeapon = item.id;
   if (item.type === "skin") save.selectedSkin = item.id;
   if (item.type === "support") save.selectedSupport = item.id;
 }
@@ -153,9 +152,122 @@ function purchaseOrEquip(itemId) {
   }
 }
 
+function upgradeCostForLevel(level) {
+  return WEAPON_UPGRADE_COSTS[level - 1] ?? null;
+}
+
+function formatWeaponStatValue(stat, level) {
+  const value = stat.values[level - 1] * stat.displayScale;
+  return `${value.toFixed(stat.decimals)}${stat.suffix}`;
+}
+
+function equipWeapon(weaponId) {
+  if (!WEAPON_DEFINITIONS[weaponId]) return;
+  save.selectedWeapon = weaponId;
+  arsenalWeaponId = weaponId;
+  persistSave();
+  renderShop();
+}
+
+function upgradeWeaponStat(weaponId, statId) {
+  const weapon = WEAPON_DEFINITIONS[weaponId];
+  const stat = weapon?.stats.find(candidate => candidate.id === statId);
+  if (!weapon || !stat) return;
+
+  const currentLevel = Math.min(5, Math.max(1, save.weaponUpgrades[weaponId][statId] || 1));
+  const cost = upgradeCostForLevel(currentLevel);
+  if (cost === null) return;
+
+  if (save.coins < cost) {
+    openNotice(
+      "NOT ENOUGH COINS",
+      `${stat.label} requires ${cost} coins. You have ${save.coins}.`,
+      GAME_STATE.SHOP
+    );
+    return;
+  }
+
+  save.coins -= cost;
+  save.weaponUpgrades[weaponId][statId] = currentLevel + 1;
+  persistSave();
+  renderShop();
+}
+
+function renderArsenal() {
+  const selector = document.createElement("div");
+  selector.className = "arsenal-selector";
+
+  for (const weapon of Object.values(WEAPON_DEFINITIONS)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `arsenal-weapon${arsenalWeaponId === weapon.id ? " selected" : ""}`;
+    button.textContent = weapon.shortName;
+    button.setAttribute("aria-pressed", String(arsenalWeaponId === weapon.id));
+    button.addEventListener("click", () => {
+      arsenalWeaponId = weapon.id;
+      renderShop();
+    });
+    selector.append(button);
+  }
+
+  const weapon = WEAPON_DEFINITIONS[arsenalWeaponId] || WEAPON_DEFINITIONS.laser;
+  const detail = document.createElement("section");
+  detail.className = "arsenal-detail";
+
+  const title = document.createElement("h3");
+  title.textContent = weapon.name.toUpperCase();
+
+  const description = document.createElement("p");
+  description.className = "arsenal-description";
+  description.textContent = weapon.description;
+
+  const statList = document.createElement("div");
+  statList.className = "arsenal-stats";
+
+  for (const stat of weapon.stats) {
+    const level = save.weaponUpgrades[weapon.id][stat.id];
+    const cost = upgradeCostForLevel(level);
+    const row = document.createElement("div");
+    row.className = "arsenal-stat";
+
+    const statInfo = document.createElement("div");
+    const label = document.createElement("strong");
+    label.textContent = stat.label;
+    const levels = document.createElement("span");
+    levels.className = "arsenal-level";
+    levels.textContent = `${"★".repeat(level)}${"☆".repeat(5 - level)}  Lv.${level}`;
+    const value = document.createElement("small");
+    value.textContent = `CURRENT ${formatWeaponStatValue(stat, level)}`;
+    statInfo.append(label, levels, value);
+
+    const upgrade = document.createElement("button");
+    upgrade.type = "button";
+    upgrade.disabled = cost === null;
+    upgrade.textContent = cost === null ? "MAX LEVEL" : `UPGRADE — ${cost} COINS`;
+    upgrade.setAttribute("aria-label", `${weapon.name} ${stat.label} ${upgrade.textContent}`);
+    upgrade.addEventListener("click", () => upgradeWeaponStat(weapon.id, stat.id));
+
+    row.append(statInfo, upgrade);
+    statList.append(row);
+  }
+
+  const equip = document.createElement("button");
+  const equipped = save.selectedWeapon === weapon.id;
+  equip.type = "button";
+  equip.className = "arsenal-equip";
+  equip.disabled = equipped;
+  equip.textContent = equipped ? "EQUIPPED" : "EQUIP — FREE";
+  equip.setAttribute("aria-label", `${equip.textContent} ${weapon.name}`);
+  equip.addEventListener("click", () => equipWeapon(weapon.id));
+
+  detail.append(title, description, statList, equip);
+  shopContent.append(selector, detail);
+}
+
 function renderShop() {
   shopContent.replaceChildren();
-  const categories = ["Starting Weapons", "Skins", "Support Ships"];
+  renderArsenal();
+  const categories = ["Skins", "Support Ships"];
 
   for (const category of categories) {
     const heading = document.createElement("h3");
@@ -199,6 +311,7 @@ function renderShop() {
 }
 
 function openShop() {
+  if (!WEAPON_DEFINITIONS[arsenalWeaponId]) arsenalWeaponId = save.selectedWeapon;
   renderShop();
   setGameState(GAME_STATE.SHOP);
   updateCoinDisplays();
@@ -221,9 +334,7 @@ function openStats() {
   appendStat("HIGHEST LEVEL", save.highestLevel);
   appendStat("TOTAL COINS EARNED", save.totalCoinsEarned);
   appendStat("CURRENT COINS", save.coins);
-  appendStat("MAX MULTI SHOT", `M${save.maxMulti}`);
-  appendStat("MAX AUTO AIM", `A${save.maxAim}`);
-  appendStat("MAX RAPID FIRE", `R${save.maxRapid}`);
+  appendStat("EQUIPPED WEAPON", WEAPON_DEFINITIONS[save.selectedWeapon].name.toUpperCase());
   setGameState(GAME_STATE.STATS);
 }
 
@@ -239,7 +350,7 @@ function initStars() {
 function startRun() {
   difficultyManager.reset();
   encounterManager.reset();
-  activeWeapon = weaponByShopItem.get(save.selectedWeapon) || WEAPON_DEFINITIONS.laser;
+  activeWeapon = createWeaponRuntime(save.selectedWeapon, save.weaponUpgrades);
   runCoins = 0;
   player = entities.createPlayer(W, H);
   pointer.active = false;
@@ -260,6 +371,7 @@ function resetRunObjects() {
   drops = [];
   particles = [];
   lightningEffects = [];
+  blastEffects = [];
   boss = null;
 }
 
@@ -272,8 +384,9 @@ function addCoins(amount) {
 
 function fireProjectileWeapon(weapon) {
   for (let i = 0; i < weapon.pellets; i++) {
-    const offset = i - (weapon.pellets - 1) / 2;
-    bullets.push(entities.createPlayerProjectile(player, weapon, offset * weapon.spread));
+    const progress = weapon.pellets === 1 ? 0.5 : i / (weapon.pellets - 1);
+    const angle = (progress - 0.5) * weapon.spread;
+    bullets.push(entities.createPlayerProjectile(player, weapon, angle));
   }
 
   player.fireCooldown = weapon.fireCooldown;
@@ -281,6 +394,7 @@ function fireProjectileWeapon(weapon) {
 }
 
 function damageImmediateTarget(target, damage) {
+  if (!target || target.dead) return;
   target.hp -= damage;
 
   if (target === boss) {
@@ -293,19 +407,33 @@ function damageImmediateTarget(target, damage) {
 }
 
 function fireLightningWeapon(weapon) {
-  const target = nearestTarget(player.x, player.y, weapon.range);
-  if (!target) return false;
+  const struckTargets = new Set();
+  let sourceX = player.x;
+  let sourceY = player.y - 18;
 
-  lightningEffects.push({
-    x1: player.x,
-    y1: player.y - 18,
-    x2: target.x,
-    y2: target.y,
-    life: weapon.effectDuration,
-    maxLife: weapon.effectDuration,
-    color: weapon.effectColor
-  });
-  damageImmediateTarget(target, weapon.damage);
+  for (let index = 0; index < weapon.chain; index++) {
+    const maximumDistance = index === 0 ? weapon.range : weapon.chainJumpRange;
+    const target = nearestTarget(sourceX, sourceY, maximumDistance, struckTargets);
+    if (!target) break;
+
+    const targetX = target.x;
+    const targetY = target.y;
+    lightningEffects.push({
+      x1: sourceX,
+      y1: sourceY,
+      x2: targetX,
+      y2: targetY,
+      life: weapon.effectDuration,
+      maxLife: weapon.effectDuration,
+      color: weapon.effectColor
+    });
+    struckTargets.add(target);
+    damageImmediateTarget(target, weapon.damage);
+    sourceX = targetX;
+    sourceY = targetY;
+  }
+
+  if (struckTargets.size === 0) return false;
   player.fireCooldown = weapon.fireCooldown;
   return true;
 }
@@ -317,13 +445,17 @@ function firePlayer() {
   return fireProjectileWeapon(activeWeapon);
 }
 
-function nearestTarget(x, y, maximumDistance = Infinity) {
-  const candidates = boss ? [boss] : enemies;
+function validTargets() {
+  return boss ? [boss] : enemies;
+}
+
+function nearestTarget(x, y, maximumDistance = Infinity, excludedTargets = null) {
+  const candidates = validTargets();
   let best = null;
   let bestDistance = maximumDistance * maximumDistance;
 
   for (const target of candidates) {
-    if (target.dead) continue;
+    if (target.dead || excludedTargets?.has(target)) continue;
     const dx = target.x - x;
     const dy = target.y - y;
     const distance = dx * dx + dy * dy;
@@ -485,24 +617,64 @@ function applyDrop(type) {
     return;
   }
 
-  // Legacy pickup handling remains so existing save/stat fields stay compatible.
-  if (type === "multi") player.multi = Math.min(3, player.multi + 1);
-  if (type === "aim") player.aim = Math.min(3, player.aim + 1);
-  if (type === "rapid") player.rapid = Math.min(3, player.rapid + 1);
-  if (type === "heal") player.hp = Math.min(player.maxHp, player.hp + 1);
-
-  save.maxMulti = Math.max(save.maxMulti, player.multi);
-  save.maxAim = Math.max(save.maxAim, player.aim);
-  save.maxRapid = Math.max(save.maxRapid, player.rapid);
-  persistSave();
-  message = type === "heal" ? "+1 HP" : `${type.toUpperCase()} UPGRADE`;
-  messageTimer = 0.8;
+  if (type === "heal") {
+    player.hp = Math.min(player.maxHp, player.hp + 1);
+    message = "+1 HP";
+    messageTimer = 0.8;
+  }
 }
 
 function explode(x, y, count = 10) {
   for (let i = 0; i < count; i++) {
     particles.push(entities.createParticle(x, y));
   }
+}
+
+function addBlastEffect(x, y, radius, color) {
+  blastEffects.push({
+    x,
+    y,
+    radius,
+    color,
+    life: 0.24,
+    maxLife: 0.24
+  });
+}
+
+function damageArea(x, y, radius, damage, excludedTarget = null) {
+  const radiusSquared = radius * radius;
+  const targets = [...validTargets()];
+
+  for (const target of targets) {
+    if (target === excludedTarget || target.dead) continue;
+    const dx = target.x - x;
+    const dy = target.y - y;
+    if (dx * dx + dy * dy <= radiusSquared) damageImmediateTarget(target, damage);
+  }
+}
+
+function resolveProjectileImpact(bullet, target) {
+  if (bullet.hitTargets.includes(target)) return false;
+  bullet.hitTargets.push(target);
+
+  if (bullet.projectileType === "rocket") {
+    addBlastEffect(bullet.x, bullet.y, bullet.blastRadius, "#ff9a5b");
+    explode(bullet.x, bullet.y, 26);
+    damageArea(bullet.x, bullet.y, bullet.blastRadius, bullet.damage);
+    return true;
+  }
+
+  if (bullet.projectileType === "plasma") {
+    damageImmediateTarget(target, bullet.damage);
+    addBlastEffect(bullet.x, bullet.y, bullet.splashRadius, "#d278ff");
+    explode(bullet.x, bullet.y, 16);
+    damageArea(bullet.x, bullet.y, bullet.splashRadius, bullet.splashDamage, target);
+    return true;
+  }
+
+  damageImmediateTarget(target, bullet.damage);
+  bullet.remainingHits--;
+  return bullet.remainingHits <= 0;
 }
 
 function damagePlayer(amount = 1) {
@@ -623,6 +795,11 @@ function updateLightningEffects(dt) {
   lightningEffects = lightningEffects.filter(effect => effect.life > 0);
 }
 
+function updateBlastEffects(dt) {
+  for (const effect of blastEffects) effect.life -= dt;
+  blastEffects = blastEffects.filter(effect => effect.life > 0);
+}
+
 function updateEnemyBullets(dt) {
   for (const bullet of enemyBullets) {
     bullet.x += bullet.vx * dt;
@@ -675,23 +852,23 @@ function resolvePlayerBulletHits() {
     const bullet = bullets[i];
     let consumed = false;
 
-    for (let j = enemies.length - 1; j >= 0; j--) {
-      const enemy = enemies[j];
-      if (!enemy.dead && entities.hit(bullet, enemy)) {
-        enemy.hp -= bullet.damage;
-        bullets.splice(i, 1);
-        consumed = true;
-        if (enemy.hp <= 0) killEnemy(j);
-        break;
+    for (const enemy of [...enemies]) {
+      if (
+        !enemy.dead
+        && !bullet.hitTargets.includes(enemy)
+        && entities.hit(bullet, enemy)
+      ) {
+        consumed = resolveProjectileImpact(bullet, enemy);
+        if (consumed) break;
       }
     }
 
-    if (consumed) continue;
+    if (!consumed && boss && !bullet.hitTargets.includes(boss) && entities.hit(bullet, boss)) {
+      consumed = resolveProjectileImpact(bullet, boss);
+    }
 
-    if (boss && entities.hit(bullet, boss)) {
-      boss.hp -= bullet.damage;
+    if (consumed) {
       bullets.splice(i, 1);
-      if (boss.hp <= 0) defeatBoss();
     }
   }
 
@@ -756,6 +933,7 @@ function update(dt) {
   updatePlayer(dt);
   updatePlayerBullets(dt);
   updateLightningEffects(dt);
+  updateBlastEffects(dt);
   updateEnemyBullets(dt);
   if (!gameState.is(GAME_STATE.PLAYING)) return;
   if (!boss) encounterManager.update(dt, encounterContext);
@@ -855,8 +1033,8 @@ function drawBoss() {
 }
 
 function drawDrop(drop) {
-  const labels = { multi: "M", aim: "A", rapid: "R", heal: "+", coin: "$" };
-  const colors = { multi: "#59ecff", aim: "#77ff90", rapid: "#ffd34e", heal: "#ff6a87", coin: "#ffd34e" };
+  const labels = { heal: "+", coin: "$" };
+  const colors = { heal: "#ff6a87", coin: "#ffd34e" };
   ctx.fillStyle = "#07101e";
   ctx.fillRect(Math.round(drop.x - 10), Math.round(drop.y - 10), 20, 20);
   ctx.strokeStyle = colors[drop.type];
@@ -871,10 +1049,41 @@ function drawDrop(drop) {
 
 function drawProjectiles() {
   for (const bullet of bullets) {
+    const x = Math.round(bullet.x);
+    const y = Math.round(bullet.y);
+
+    if (bullet.projectileType === "rocket") {
+      ctx.fillStyle = "#ffdf72";
+      ctx.fillRect(x - 3, y + 7, 6, 7);
+      ctx.fillStyle = bullet.color;
+      ctx.fillRect(x - 5, y - 8, 10, 16);
+      ctx.fillStyle = "#fff0d0";
+      ctx.fillRect(x - 2, y - 10, 4, 5);
+      continue;
+    }
+
+    if (bullet.projectileType === "railgun") {
+      ctx.fillStyle = "rgba(89, 236, 255, 0.35)";
+      ctx.fillRect(x - bullet.w / 2 - 3, y - bullet.h / 2, bullet.w + 6, bullet.h);
+      ctx.fillStyle = bullet.color;
+      ctx.fillRect(x - bullet.w / 2, y - bullet.h / 2, bullet.w, bullet.h);
+      continue;
+    }
+
+    if (bullet.projectileType === "plasma") {
+      ctx.fillStyle = "rgba(210, 120, 255, 0.35)";
+      ctx.fillRect(x - bullet.w / 2 - 3, y - bullet.h / 2 - 3, bullet.w + 6, bullet.h + 6);
+      ctx.fillStyle = bullet.color;
+      ctx.fillRect(x - bullet.w / 2, y - bullet.h / 2, bullet.w, bullet.h);
+      ctx.fillStyle = "#f4d8ff";
+      ctx.fillRect(x - bullet.w / 4, y - bullet.h / 4, bullet.w / 2, bullet.h / 2);
+      continue;
+    }
+
     ctx.fillStyle = bullet.color || "#7ff8ff";
     ctx.fillRect(
-      Math.round(bullet.x - bullet.w / 2),
-      Math.round(bullet.y - bullet.h / 2),
+      Math.round(x - bullet.w / 2),
+      Math.round(y - bullet.h / 2),
       bullet.w,
       bullet.h
     );
@@ -903,6 +1112,25 @@ function drawLightningEffects() {
     }
   }
   ctx.globalAlpha = 1;
+}
+
+function drawBlastEffects() {
+  for (const effect of blastEffects) {
+    const progress = 1 - effect.life / effect.maxLife;
+    const radius = Math.max(4, effect.radius * progress);
+    ctx.globalAlpha = Math.max(0, effect.life / effect.maxLife);
+    ctx.fillStyle = effect.color;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1;
 }
 
 function drawParticles() {
@@ -937,6 +1165,7 @@ function draw() {
   for (const drop of drops) drawDrop(drop);
   drawBoss();
   drawLightningEffects();
+  drawBlastEffects();
   drawPlayer();
   drawParticles();
   drawMessage();

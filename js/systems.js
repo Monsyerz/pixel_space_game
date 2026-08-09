@@ -2,7 +2,7 @@
   "use strict";
 
   const PSA = global.PSA;
-  const { ENDLESS_BALANCE } = PSA;
+  const { ENDLESS_BALANCE, WEAPON_DEFINITIONS } = PSA;
   const validStates = new Set(Object.values(PSA.GAME_STATE));
   let currentState = null;
   let stateChangeHandler = null;
@@ -32,6 +32,39 @@
     if (stateChangeHandler) {
       stateChangeHandler(nextState, previousState);
     }
+  };
+
+  PSA.getWeaponStatValue = function getWeaponStatValue(weaponId, statId, level) {
+    const weapon = WEAPON_DEFINITIONS[weaponId];
+    const stat = weapon?.stats.find(candidate => candidate.id === statId);
+    if (!stat) return undefined;
+    const safeLevel = Number.isFinite(Number(level))
+      ? Math.min(5, Math.max(1, Math.floor(Number(level))))
+      : 1;
+    return stat.values[safeLevel - 1];
+  };
+
+  PSA.createWeaponRuntime = function createWeaponRuntime(weaponId, weaponUpgrades) {
+    const definition = WEAPON_DEFINITIONS[weaponId] || WEAPON_DEFINITIONS.laser;
+    const savedLevels = weaponUpgrades?.[definition.id] || {};
+    const upgradeLevels = {};
+    const runtime = { ...definition };
+
+    for (const stat of definition.stats) {
+      const level = Number.isFinite(Number(savedLevels[stat.id]))
+        ? Math.min(5, Math.max(1, Math.floor(Number(savedLevels[stat.id]))))
+        : 1;
+      upgradeLevels[stat.id] = level;
+      runtime[stat.property] = stat.values[level - 1];
+    }
+
+    if (runtime.projectileSize) {
+      runtime.projectileWidth = runtime.projectileSize;
+      runtime.projectileHeight = runtime.projectileSize;
+    }
+
+    runtime.upgradeLevels = Object.freeze(upgradeLevels);
+    return Object.freeze(runtime);
   };
 
   PSA.createDifficultyManager = function createDifficultyManager() {

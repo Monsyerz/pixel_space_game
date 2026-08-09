@@ -13,10 +13,7 @@
       maxHp: 5,
       speed: 330,
       fireCooldown: 0,
-      invincible: 0,
-      multi: 0,
-      aim: 0,
-      rapid: 0
+      invincible: 0
     };
   }
 
@@ -31,7 +28,13 @@
       damage: weapon.damage,
       color: weapon.projectileColor,
       life: weapon.projectileLife,
-      homing: 0
+      homing: 0,
+      projectileType: weapon.projectileType || "laser",
+      remainingHits: weapon.penetration || 1,
+      hitTargets: [],
+      blastRadius: weapon.blastRadius || 0,
+      splashDamage: weapon.splashDamage || 0,
+      splashRadius: weapon.splashRadius || 0
     };
   }
 
