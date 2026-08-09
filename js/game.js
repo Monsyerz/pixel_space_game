@@ -10,147 +10,17 @@ const screens = [...document.querySelectorAll(".screen")];
 const hud = document.getElementById("hud");
 const shopContent = document.getElementById("shopContent");
 const statsList = document.getElementById("statsList");
+const {
+  GAME_STATE,
+  SHOP_ITEMS,
+  entities,
+  gameState,
+  setGameState,
+  storage
+} = window.PSA;
 
-const SAVE_KEY = "pixelSpaceAssaultSaveV2";
-
-const SHOP_ITEMS = [
-  {
-    id: "weapon-pulse-blaster",
-    category: "Starting Weapons",
-    type: "weapon",
-    name: "Pulse Blaster",
-    description: "Niezawodna broń startowa o zbalansowanej szybkostrzelności.",
-    price: 500
-  },
-  {
-    id: "weapon-twin-laser",
-    category: "Starting Weapons",
-    type: "weapon",
-    name: "Twin Laser",
-    description: "Podwójna wiązka przygotowana do przyszłego systemu uzbrojenia.",
-    price: 1000
-  },
-  {
-    id: "weapon-plasma-shot",
-    category: "Starting Weapons",
-    type: "weapon",
-    name: "Plasma Shot",
-    description: "Ciężki pocisk plazmowy planowany dla późniejszej wersji gry.",
-    price: 1500
-  },
-  {
-    id: "skin-blue-steel",
-    category: "Skins",
-    type: "skin",
-    name: "Blue Steel",
-    description: "Klasyczne cyjanowo-niebieskie poszycie statku.",
-    price: 750
-  },
-  {
-    id: "skin-crimson",
-    category: "Skins",
-    type: "skin",
-    name: "Crimson",
-    description: "Czerwony wariant kolorystyczny dla odważnych pilotów.",
-    price: 1500
-  },
-  {
-    id: "skin-neon-ghost",
-    category: "Skins",
-    type: "skin",
-    name: "Neon Ghost",
-    description: "Jasne neonowe poszycie inspirowane głębokim kosmosem.",
-    price: 2500
-  },
-  {
-    id: "support-scout-wing",
-    category: "Support Ships",
-    type: "support",
-    name: "Scout Wing",
-    description: "Miniaturowy statek wsparcia; jego działanie pojawi się później.",
-    price: 5000
-  }
-];
-
-const SHOP_ITEM_IDS = new Set(SHOP_ITEMS.map(item => item.id));
-const defaultSave = {
-  coins: 0,
-  totalCoinsEarned: 0,
-  totalKills: 0,
-  bossesDefeated: 0,
-  highestStage: 1,
-  highestLevel: 1,
-  highScore: 0,
-  maxMulti: 0,
-  maxAim: 0,
-  maxRapid: 0,
-  ownedItems: ["weapon-pulse-blaster", "skin-blue-steel"],
-  selectedWeapon: "weapon-pulse-blaster",
-  selectedSkin: "skin-blue-steel",
-  selectedSupport: null
-};
-
-function safeInteger(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : fallback;
-}
-
-function itemMatchesType(itemId, type) {
-  return SHOP_ITEMS.some(item => item.id === itemId && item.type === type);
-}
-
-function loadSave() {
-  let parsed = {};
-
-  try {
-    parsed = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}") || {};
-  } catch {
-    parsed = {};
-  }
-
-  const ownedItems = Array.isArray(parsed.ownedItems)
-    ? parsed.ownedItems.filter(itemId => typeof itemId === "string" && SHOP_ITEM_IDS.has(itemId))
-    : [];
-
-  for (const defaultItem of defaultSave.ownedItems) {
-    if (!ownedItems.includes(defaultItem)) ownedItems.push(defaultItem);
-  }
-
-  const normalized = {
-    coins: safeInteger(parsed.coins, defaultSave.coins),
-    totalCoinsEarned: safeInteger(parsed.totalCoinsEarned, defaultSave.totalCoinsEarned),
-    totalKills: safeInteger(parsed.totalKills, defaultSave.totalKills),
-    bossesDefeated: safeInteger(parsed.bossesDefeated, defaultSave.bossesDefeated),
-    highestStage: Math.min(5, Math.max(1, safeInteger(parsed.highestStage, defaultSave.highestStage))),
-    highestLevel: Math.min(5, Math.max(1, safeInteger(parsed.highestLevel, defaultSave.highestLevel))),
-    highScore: safeInteger(parsed.highScore, defaultSave.highScore),
-    maxMulti: Math.min(3, safeInteger(parsed.maxMulti, defaultSave.maxMulti)),
-    maxAim: Math.min(3, safeInteger(parsed.maxAim, defaultSave.maxAim)),
-    maxRapid: Math.min(3, safeInteger(parsed.maxRapid, defaultSave.maxRapid)),
-    ownedItems,
-    selectedWeapon: parsed.selectedWeapon,
-    selectedSkin: parsed.selectedSkin,
-    selectedSupport: parsed.selectedSupport
-  };
-
-  if (!ownedItems.includes(normalized.selectedWeapon) || !itemMatchesType(normalized.selectedWeapon, "weapon")) {
-    normalized.selectedWeapon = defaultSave.selectedWeapon;
-  }
-
-  if (!ownedItems.includes(normalized.selectedSkin) || !itemMatchesType(normalized.selectedSkin, "skin")) {
-    normalized.selectedSkin = defaultSave.selectedSkin;
-  }
-
-  if (!ownedItems.includes(normalized.selectedSupport) || !itemMatchesType(normalized.selectedSupport, "support")) {
-    normalized.selectedSupport = null;
-  }
-
-  return normalized;
-}
-
-let save = loadSave();
-let mode = "menu";
-let noticeReturnMode = "menu";
+let save = storage.load();
+let noticeReturnState = GAME_STATE.MENU;
 let animationId = 0;
 let lastTime = performance.now();
 const keys = new Set();
@@ -176,14 +46,9 @@ let message = "";
 let messageTimer = 0;
 
 function persistSave() {
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
-    updateCoinDisplays();
-    return true;
-  } catch {
-    updateCoinDisplays();
-    return false;
-  }
+  const saved = storage.save(save);
+  updateCoinDisplays();
+  return saved;
 }
 
 function showScreen(id) {
@@ -192,6 +57,25 @@ function showScreen(id) {
   hud.classList.toggle("hidden", id !== null);
 }
 
+const SCREEN_BY_STATE = Object.freeze({
+  [GAME_STATE.MENU]: "menuScreen",
+  [GAME_STATE.PLAYING]: null,
+  [GAME_STATE.PAUSED]: null,
+  [GAME_STATE.UPGRADE_SELECTION]: null,
+  [GAME_STATE.EVENT]: null,
+  [GAME_STATE.GAME_OVER]: "gameOverScreen",
+  [GAME_STATE.SHOP]: "shopScreen",
+  [GAME_STATE.STATS]: "statsScreen",
+  [GAME_STATE.NOTICE]: "noticeScreen",
+  [GAME_STATE.VICTORY]: "winScreen",
+  [GAME_STATE.QUIT]: "quitScreen"
+});
+
+gameState.onChange(nextState => {
+  if (nextState !== GAME_STATE.PLAYING) clearInput();
+  showScreen(SCREEN_BY_STATE[nextState] ?? null);
+});
+
 function updateCoinDisplays() {
   document.querySelectorAll(".coinValue").forEach(element => {
     element.textContent = String(save.coins);
@@ -199,10 +83,7 @@ function updateCoinDisplays() {
 }
 
 function openMenu() {
-  mode = "menu";
-  pointer.active = false;
-  keys.clear();
-  showScreen("menuScreen");
+  setGameState(GAME_STATE.MENU);
   updateCoinDisplays();
 }
 
@@ -218,17 +99,15 @@ function selectItem(item) {
   if (item.type === "support") save.selectedSupport = item.id;
 }
 
-function openNotice(title, text, returnMode = "menu") {
-  noticeReturnMode = returnMode;
-  mode = "notice";
-  pointer.active = false;
+function openNotice(title, text, returnState = GAME_STATE.MENU) {
+  noticeReturnState = returnState;
   document.getElementById("noticeTitle").textContent = title;
   document.getElementById("noticeText").textContent = text;
-  showScreen("noticeScreen");
+  setGameState(GAME_STATE.NOTICE);
 }
 
 function closeNotice() {
-  if (noticeReturnMode === "shop") {
+  if (noticeReturnState === GAME_STATE.SHOP) {
     openShop();
   } else {
     openMenu();
@@ -243,7 +122,11 @@ function purchaseOrEquip(itemId) {
 
   if (!isOwned) {
     if (save.coins < item.price) {
-      openNotice("NOT ENOUGH COINS", `Potrzebujesz ${item.price} coins. Masz ${save.coins}.`, "shop");
+      openNotice(
+        "NOT ENOUGH COINS",
+        `Potrzebujesz ${item.price} coins. Masz ${save.coins}.`,
+        GAME_STATE.SHOP
+      );
       return;
     }
 
@@ -307,11 +190,8 @@ function renderShop() {
 }
 
 function openShop() {
-  mode = "shop";
-  pointer.active = false;
-  keys.clear();
   renderShop();
-  showScreen("shopScreen");
+  setGameState(GAME_STATE.SHOP);
   updateCoinDisplays();
 }
 
@@ -324,9 +204,6 @@ function appendStat(label, value) {
 }
 
 function openStats() {
-  mode = "stats";
-  pointer.active = false;
-  keys.clear();
   statsList.replaceChildren();
   appendStat("HIGH SCORE", save.highScore);
   appendStat("TOTAL KILLS", save.totalKills);
@@ -338,7 +215,7 @@ function openStats() {
   appendStat("MAX MULTI SHOT", `M${save.maxMulti}`);
   appendStat("MAX AUTO AIM", `A${save.maxAim}`);
   appendStat("MAX RAPID FIRE", `R${save.maxRapid}`);
-  showScreen("statsScreen");
+  setGameState(GAME_STATE.STATS);
 }
 
 function initStars() {
@@ -351,32 +228,18 @@ function initStars() {
 }
 
 function startRun() {
-  mode = "playing";
   stage = 1;
   level = 1;
   score = 0;
   runCoins = 0;
-  player = {
-    x: W / 2,
-    y: H - 80,
-    w: 30,
-    h: 28,
-    hp: 5,
-    maxHp: 5,
-    speed: 330,
-    fireCooldown: 0,
-    invincible: 0,
-    multi: 0,
-    aim: 0,
-    rapid: 0
-  };
+  player = entities.createPlayer(W, H);
   pointer.active = false;
   pointer.x = player.x;
   pointer.y = player.y;
   keys.clear();
   resetLevel();
   updateHud();
-  showScreen(null);
+  setGameState(GAME_STATE.PLAYING);
   message = "STAGE 1 - LEVEL 1";
   messageTimer = 1.8;
 }
@@ -408,16 +271,7 @@ function firePlayer() {
 
   for (let i = 0; i < count; i++) {
     const offset = i - (count - 1) / 2;
-    bullets.push({
-      x: player.x,
-      y: player.y - 18,
-      vx: Math.sin(offset * spread) * 360,
-      vy: -560,
-      w: 4,
-      h: 10,
-      damage: 1,
-      homing: player.aim
-    });
+    bullets.push(entities.createPlayerBullet(player, offset, spread));
   }
 
   player.fireCooldown = Math.max(0.075, 0.25 - player.rapid * 0.055);
@@ -442,59 +296,17 @@ function nearestTarget(x, y) {
 }
 
 function spawnEnemy() {
-  const difficulty = stage + level * 0.35;
-  const typeRoll = Math.random();
-  const type = typeRoll < 0.18 + stage * 0.025
-    ? "zigzag"
-    : typeRoll < 0.35
-      ? "shooter"
-      : "basic";
-  const hp = Math.ceil(1 + stage * 0.35 + level * 0.12);
-  const enemy = {
-    x: 40 + Math.random() * (W - 80),
-    y: -30,
-    baseX: 0,
-    w: type === "shooter" ? 28 : 24,
-    h: 22,
-    hp,
-    maxHp: hp,
-    speed: 70 + difficulty * 12 + Math.random() * 35,
-    type,
-    age: 0,
-    shootTimer: 1.1 + Math.random() * 1.5
-  };
-  enemy.baseX = enemy.x;
-  enemies.push(enemy);
+  enemies.push(entities.createEnemy(W, stage, level));
 }
 
 function spawnBoss() {
-  const hp = 34 + stage * 16 + level * 8;
-  boss = {
-    x: W / 2,
-    y: 92,
-    w: 112,
-    h: 58,
-    hp,
-    maxHp: hp,
-    dir: 1,
-    speed: 90 + stage * 10,
-    shootTimer: 0.8,
-    age: 0
-  };
+  boss = entities.createBoss(W, stage, level);
   message = `BOSS ${stage}-${level}`;
   messageTimer = 1.5;
 }
 
 function shootAtPlayer(source, speed = 230, spread = 0) {
-  const angle = Math.atan2(player.y - source.y, player.x - source.x) + spread;
-  enemyBullets.push({
-    x: source.x,
-    y: source.y + source.h / 2,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    w: 7,
-    h: 7
-  });
+  enemyBullets.push(entities.createEnemyBullet(source, player, speed, spread));
 }
 
 function dropUpgrade(x, y) {
@@ -506,7 +318,7 @@ function dropUpgrade(x, y) {
   else if (roll < 0.56) type = "aim";
   else if (roll < 0.84) type = "rapid";
 
-  drops.push({ x, y, type, w: 20, h: 20, speed: 95, age: 0 });
+  drops.push(entities.createDrop(x, y, type));
 }
 
 function applyDrop(type) {
@@ -523,27 +335,14 @@ function applyDrop(type) {
   messageTimer = 0.8;
 }
 
-function hit(a, b) {
-  return Math.abs(a.x - b.x) * 2 < a.w + b.w
-    && Math.abs(a.y - b.y) * 2 < a.h + b.h;
-}
-
 function explode(x, y, count = 10) {
   for (let i = 0; i < count; i++) {
-    particles.push({
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 220,
-      vy: (Math.random() - 0.5) * 220,
-      life: 0.25 + Math.random() * 0.5,
-      maxLife: 0.75,
-      size: 2 + Math.random() * 5
-    });
+    particles.push(entities.createParticle(x, y));
   }
 }
 
 function damagePlayer(amount = 1) {
-  if (player.invincible > 0 || mode !== "playing") return;
+  if (player.invincible > 0 || !gameState.is(GAME_STATE.PLAYING)) return;
   player.hp -= amount;
   player.invincible = 1.1;
   explode(player.x, player.y, 18);
@@ -607,21 +406,18 @@ function advanceLevel() {
 }
 
 function endRun(won) {
-  mode = won ? "won" : "gameover";
-  pointer.active = false;
-  keys.clear();
   save.highScore = Math.max(save.highScore, score);
   updateHighestProgress();
   persistSave();
 
   if (won) {
     document.getElementById("winText").textContent = `Wygrałeś wszystkie 25 leveli. Score: ${score}. Run coins: ${runCoins}.`;
-    showScreen("winScreen");
+    setGameState(GAME_STATE.VICTORY);
   } else {
     document.getElementById("gameOverScoreText").textContent = `SCORE: ${score}`;
     document.getElementById("runCoinsText").textContent = `RUN COINS: ${runCoins}`;
     document.getElementById("totalCoinsText").textContent = `TOTAL COINS: ${save.coins}`;
-    showScreen("gameOverScreen");
+    setGameState(GAME_STATE.GAME_OVER);
   }
 }
 
@@ -697,7 +493,7 @@ function updateEnemyBullets(dt) {
   for (const bullet of enemyBullets) {
     bullet.x += bullet.vx * dt;
     bullet.y += bullet.vy * dt;
-    if (hit(bullet, player)) {
+    if (entities.hit(bullet, player)) {
       bullet.dead = true;
       damagePlayer(1);
     }
@@ -738,7 +534,7 @@ function updateEnemies(dt) {
       }
     }
 
-    if (hit(enemy, player)) {
+    if (entities.hit(enemy, player)) {
       enemy.dead = true;
       damagePlayer(1);
       explode(enemy.x, enemy.y, 10);
@@ -755,7 +551,7 @@ function resolvePlayerBulletHits() {
 
     for (let j = enemies.length - 1; j >= 0; j--) {
       const enemy = enemies[j];
-      if (!enemy.dead && hit(bullet, enemy)) {
+      if (!enemy.dead && entities.hit(bullet, enemy)) {
         enemy.hp -= bullet.damage;
         bullets.splice(i, 1);
         consumed = true;
@@ -766,7 +562,7 @@ function resolvePlayerBulletHits() {
 
     if (consumed) continue;
 
-    if (boss && hit(bullet, boss)) {
+    if (boss && entities.hit(bullet, boss)) {
       boss.hp -= bullet.damage;
       bullets.splice(i, 1);
       if (boss.hp <= 0) defeatBoss();
@@ -792,7 +588,7 @@ function updateLevelTransitions(dt) {
     }
   } else if (transitionTimer > 0 && !boss) {
     transitionTimer -= dt;
-    if (transitionTimer <= 0 && mode === "playing") advanceLevel();
+    if (transitionTimer <= 0 && gameState.is(GAME_STATE.PLAYING)) advanceLevel();
   }
 }
 
@@ -813,7 +609,7 @@ function updateBoss(dt) {
     boss.shootTimer = Math.max(0.42, 1.05 - stage * 0.09 - level * 0.035);
   }
 
-  if (hit(boss, player)) damagePlayer(2);
+  if (entities.hit(boss, player)) damagePlayer(2);
 }
 
 function updateDrops(dt) {
@@ -821,7 +617,7 @@ function updateDrops(dt) {
     drop.age += dt;
     drop.y += drop.speed * dt;
     drop.x += Math.sin(drop.age * 5) * 28 * dt;
-    if (hit(drop, player)) {
+    if (entities.hit(drop, player)) {
       drop.dead = true;
       applyDrop(drop.type);
     }
@@ -845,16 +641,16 @@ function updateParticles(dt) {
 function update(dt) {
   updateStars(dt);
 
-  if (mode !== "playing" || !player) return;
+  if (!gameState.is(GAME_STATE.PLAYING) || !player) return;
 
   updatePlayer(dt);
   updatePlayerBullets(dt);
   updateEnemyBullets(dt);
-  if (mode !== "playing") return;
+  if (!gameState.is(GAME_STATE.PLAYING)) return;
   updateEnemySpawning(dt);
   updateEnemies(dt);
   resolvePlayerBulletHits();
-  if (mode !== "playing") return;
+  if (!gameState.is(GAME_STATE.PLAYING)) return;
   updateLevelTransitions(dt);
   updateBoss(dt);
   updateDrops(dt);
@@ -993,7 +789,7 @@ function drawMessage() {
 function draw() {
   drawBackground();
 
-  if (!["playing", "gameover", "won"].includes(mode)) return;
+  if (![GAME_STATE.PLAYING, GAME_STATE.GAME_OVER, GAME_STATE.VICTORY].includes(gameState.current)) return;
 
   drawProjectiles();
   for (const enemy of enemies) drawEnemy(enemy);
@@ -1048,7 +844,7 @@ function clearInput() {
 }
 
 canvas.addEventListener("pointerdown", event => {
-  if (mode !== "playing") return;
+  if (!gameState.is(GAME_STATE.PLAYING)) return;
   event.preventDefault();
   canvas.setPointerCapture?.(event.pointerId);
   const point = canvasPoint(event);
@@ -1058,7 +854,7 @@ canvas.addEventListener("pointerdown", event => {
 }, { passive: false });
 
 canvas.addEventListener("pointermove", event => {
-  if (mode !== "playing" || !pointer.active) return;
+  if (!gameState.is(GAME_STATE.PLAYING) || !pointer.active) return;
   event.preventDefault();
   const point = canvasPoint(event);
   pointer.x = point.x;
@@ -1077,7 +873,7 @@ window.addEventListener("keydown", event => {
     event.preventDefault();
   }
 
-  if (event.key === "Escape" && mode === "playing") openMenu();
+  if (event.key === "Escape" && gameState.is(GAME_STATE.PLAYING)) openMenu();
 });
 
 window.addEventListener("keyup", event => {
@@ -1093,8 +889,7 @@ document.getElementById("startButton").addEventListener("click", startRun);
 document.getElementById("shopButton").addEventListener("click", openShop);
 document.getElementById("statsButton").addEventListener("click", openStats);
 document.getElementById("quitButton").addEventListener("click", () => {
-  mode = "quit";
-  showScreen("quitScreen");
+  setGameState(GAME_STATE.QUIT);
 });
 document.getElementById("shopBackButton").addEventListener("click", openMenu);
 document.getElementById("statsBackButton").addEventListener("click", openMenu);
@@ -1105,7 +900,11 @@ document.getElementById("mainMenuButton").addEventListener("click", openMenu);
 document.getElementById("winMenuButton").addEventListener("click", openMenu);
 document.getElementById("winShopButton").addEventListener("click", openShop);
 document.getElementById("buyCoinsButton").addEventListener("click", () => {
-  openNotice("COINS", "Zakup coinów zostanie podłączony później. Przycisk jest teraz tylko placeholderem.", "menu");
+  openNotice(
+    "COINS",
+    "Zakup coinów zostanie podłączony później. Przycisk jest teraz tylko placeholderem.",
+    GAME_STATE.MENU
+  );
 });
 document.getElementById("noticeBackButton").addEventListener("click", closeNotice);
 
