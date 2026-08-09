@@ -21,11 +21,15 @@ const {
   entities,
   gameState,
   setGameState,
-  storage
+  storage,
+  WEAPON_DEFINITIONS
 } = window.PSA;
 
 const difficultyManager = createDifficultyManager();
 const runMetrics = difficultyManager.metrics;
+const weaponByShopItem = new Map(
+  Object.values(WEAPON_DEFINITIONS).map(weapon => [weapon.shopItemId, weapon])
+);
 const encounterManager = createEncounterManager({
   definitions: ENCOUNTER_DEFINITIONS,
   metrics: runMetrics
@@ -42,8 +46,10 @@ let enemyBullets = [];
 let enemies = [];
 let drops = [];
 let particles = [];
+let lightningEffects = [];
 let boss = null;
 let player = null;
+let activeWeapon = WEAPON_DEFINITIONS.laser;
 let runCoins = 0;
 let message = "";
 let messageTimer = 0;
@@ -233,6 +239,7 @@ function initStars() {
 function startRun() {
   difficultyManager.reset();
   encounterManager.reset();
+  activeWeapon = weaponByShopItem.get(save.selectedWeapon) || WEAPON_DEFINITIONS.laser;
   runCoins = 0;
   player = entities.createPlayer(W, H);
   pointer.active = false;
@@ -252,6 +259,7 @@ function resetRunObjects() {
   enemies = [];
   drops = [];
   particles = [];
+  lightningEffects = [];
   boss = null;
 }
 
@@ -262,24 +270,60 @@ function addCoins(amount) {
   persistSave();
 }
 
-function firePlayer() {
-  const count = 1 + player.multi * 2;
-  const spread = player.multi === 0 ? 0 : 0.13 - player.multi * 0.012;
-
-  for (let i = 0; i < count; i++) {
-    const offset = i - (count - 1) / 2;
-    bullets.push(entities.createPlayerBullet(player, offset, spread));
+function fireProjectileWeapon(weapon) {
+  for (let i = 0; i < weapon.pellets; i++) {
+    const offset = i - (weapon.pellets - 1) / 2;
+    bullets.push(entities.createPlayerProjectile(player, weapon, offset * weapon.spread));
   }
 
-  player.fireCooldown = Math.max(0.075, 0.25 - player.rapid * 0.055);
+  player.fireCooldown = weapon.fireCooldown;
+  return true;
 }
 
-function nearestTarget(x, y) {
+function damageImmediateTarget(target, damage) {
+  target.hp -= damage;
+
+  if (target === boss) {
+    if (target.hp <= 0) defeatBoss();
+    return;
+  }
+
+  const index = enemies.indexOf(target);
+  if (index >= 0 && target.hp <= 0) killEnemy(index);
+}
+
+function fireLightningWeapon(weapon) {
+  const target = nearestTarget(player.x, player.y, weapon.range);
+  if (!target) return false;
+
+  lightningEffects.push({
+    x1: player.x,
+    y1: player.y - 18,
+    x2: target.x,
+    y2: target.y,
+    life: weapon.effectDuration,
+    maxLife: weapon.effectDuration,
+    color: weapon.effectColor
+  });
+  damageImmediateTarget(target, weapon.damage);
+  player.fireCooldown = weapon.fireCooldown;
+  return true;
+}
+
+function firePlayer() {
+  if (activeWeapon.kind === "lightning") {
+    return fireLightningWeapon(activeWeapon);
+  }
+  return fireProjectileWeapon(activeWeapon);
+}
+
+function nearestTarget(x, y, maximumDistance = Infinity) {
   const candidates = boss ? [boss] : enemies;
   let best = null;
-  let bestDistance = Infinity;
+  let bestDistance = maximumDistance * maximumDistance;
 
   for (const target of candidates) {
+    if (target.dead) continue;
     const dx = target.x - x;
     const dy = target.y - y;
     const distance = dx * dx + dy * dy;
@@ -429,12 +473,7 @@ const encounterContext = Object.freeze({
 function dropUpgrade(x, y) {
   if (Math.random() > 0.18) return;
 
-  const roll = Math.random();
-  let type = "heal";
-  if (roll < 0.28) type = "multi";
-  else if (roll < 0.56) type = "aim";
-  else if (roll < 0.84) type = "rapid";
-
+  const type = player.hp < player.maxHp && Math.random() < 0.5 ? "heal" : "coin";
   drops.push(entities.createDrop(x, y, type));
 }
 
@@ -446,6 +485,7 @@ function applyDrop(type) {
     return;
   }
 
+  // Legacy pickup handling remains so existing save/stat fields stay compatible.
   if (type === "multi") player.multi = Math.min(3, player.multi + 1);
   if (type === "aim") player.aim = Math.min(3, player.aim + 1);
   if (type === "rapid") player.rapid = Math.min(3, player.rapid + 1);
@@ -550,6 +590,7 @@ function updatePlayer(dt) {
 
 function updatePlayerBullets(dt) {
   for (const bullet of bullets) {
+    if (Number.isFinite(bullet.life)) bullet.life -= dt;
     if (bullet.homing > 0) {
       const target = nearestTarget(bullet.x, bullet.y);
       if (target) {
@@ -569,11 +610,17 @@ function updatePlayerBullets(dt) {
   }
 
   bullets = bullets.filter(bullet => (
-    bullet.y > -30
+    (!Number.isFinite(bullet.life) || bullet.life > 0)
+    && bullet.y > -30
     && bullet.y < H + 30
     && bullet.x > -30
     && bullet.x < W + 30
   ));
+}
+
+function updateLightningEffects(dt) {
+  for (const effect of lightningEffects) effect.life -= dt;
+  lightningEffects = lightningEffects.filter(effect => effect.life > 0);
 }
 
 function updateEnemyBullets(dt) {
@@ -708,6 +755,7 @@ function update(dt) {
   difficultyManager.update(dt);
   updatePlayer(dt);
   updatePlayerBullets(dt);
+  updateLightningEffects(dt);
   updateEnemyBullets(dt);
   if (!gameState.is(GAME_STATE.PLAYING)) return;
   if (!boss) encounterManager.update(dt, encounterContext);
@@ -823,14 +871,38 @@ function drawDrop(drop) {
 
 function drawProjectiles() {
   for (const bullet of bullets) {
-    ctx.fillStyle = "#7ff8ff";
-    ctx.fillRect(Math.round(bullet.x - 2), Math.round(bullet.y - 6), bullet.w, bullet.h);
+    ctx.fillStyle = bullet.color || "#7ff8ff";
+    ctx.fillRect(
+      Math.round(bullet.x - bullet.w / 2),
+      Math.round(bullet.y - bullet.h / 2),
+      bullet.w,
+      bullet.h
+    );
   }
 
   for (const bullet of enemyBullets) {
     ctx.fillStyle = "#ff4568";
     ctx.fillRect(Math.round(bullet.x - 4), Math.round(bullet.y - 4), 8, 8);
   }
+}
+
+function drawLightningEffects() {
+  for (const effect of lightningEffects) {
+    ctx.globalAlpha = Math.max(0, effect.life / effect.maxLife);
+    ctx.fillStyle = effect.color;
+
+    const segments = 22;
+    for (let i = 0; i <= segments; i++) {
+      const progress = i / segments;
+      const jitter = i === 0 || i === segments
+        ? 0
+        : Math.sin(i * 2.4 + effect.life * 95) * 6;
+      const x = effect.x1 + (effect.x2 - effect.x1) * progress + jitter;
+      const y = effect.y1 + (effect.y2 - effect.y1) * progress;
+      ctx.fillRect(Math.round(x - 2), Math.round(y - 2), 4, 4);
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawParticles() {
@@ -864,6 +936,7 @@ function draw() {
   for (const enemy of enemies) drawEnemy(enemy);
   for (const drop of drops) drawDrop(drop);
   drawBoss();
+  drawLightningEffects();
   drawPlayer();
   drawParticles();
   drawMessage();
@@ -875,7 +948,7 @@ function updateHud() {
   document.getElementById("hpText").textContent = `HP ${Math.max(0, player.hp)}/${player.maxHp}`;
   document.getElementById("scoreText").textContent = `SCORE ${runMetrics.score.toLocaleString("en-US")}`;
   document.getElementById("multiplierText").textContent = `MULTIPLIER x${runMetrics.multiplier}`;
-  document.getElementById("upgradeText").textContent = `M${player.multi} A${player.aim} R${player.rapid}`;
+  document.getElementById("upgradeText").textContent = `WEAPON ${activeWeapon.name.toUpperCase()}`;
   document.getElementById("runStatusText").textContent = `TIME ${formatRunTime(runMetrics.survivalTime)} • COINS ${save.coins}`;
 }
 

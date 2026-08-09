@@ -22,7 +22,7 @@
   PSA.SAVE_KEY = "pixelSpaceAssaultSaveV2";
 
   PSA.ENDLESS_BALANCE = Object.freeze({
-    difficultyGrowthRate: 1 / 75,
+    distancePerDifficulty: 450,
     maximumDifficulty: 8,
     baseDistanceRate: 6,
     distanceDifficultyBonus: 0.15,
@@ -31,6 +31,50 @@
     maximumEnemyProjectileSpeed: 320,
     maximumSimultaneousEnemies: 11,
     maximumEnemyBullets: 80
+  });
+
+  PSA.WEAPON_DEFINITIONS = Object.freeze({
+    laser: Object.freeze({
+      id: "laser",
+      name: "Laser",
+      shopItemId: "weapon-pulse-blaster",
+      kind: "projectile",
+      fireCooldown: 0.18,
+      damage: 1,
+      projectileSpeed: 620,
+      projectileLife: 1.2,
+      projectileWidth: 4,
+      projectileHeight: 12,
+      projectileColor: "#7ff8ff",
+      pellets: 1,
+      spread: 0
+    }),
+    shotgun: Object.freeze({
+      id: "shotgun",
+      name: "Shotgun",
+      shopItemId: "weapon-twin-laser",
+      kind: "projectile",
+      fireCooldown: 0.58,
+      damage: 1,
+      projectileSpeed: 480,
+      projectileLife: 0.6,
+      projectileWidth: 5,
+      projectileHeight: 9,
+      projectileColor: "#ffd36a",
+      pellets: 3,
+      spread: 0.18
+    }),
+    lightning: Object.freeze({
+      id: "lightning",
+      name: "Lightning Strike",
+      shopItemId: "weapon-plasma-shot",
+      kind: "lightning",
+      fireCooldown: 0.78,
+      damage: 2,
+      range: 390,
+      effectDuration: 0.14,
+      effectColor: "#b9a7ff"
+    })
   });
 
   PSA.ENCOUNTER_DEFINITIONS = Object.freeze([
@@ -121,24 +165,24 @@
       id: "weapon-pulse-blaster",
       category: "Starting Weapons",
       type: "weapon",
-      name: "Pulse Blaster",
-      description: "Niezawodna broń startowa o zbalansowanej szybkostrzelności.",
+      name: "Laser",
+      description: "Celna, szybka i niezawodna broń średniego oraz dalekiego zasięgu.",
       price: 500
     },
     {
       id: "weapon-twin-laser",
       category: "Starting Weapons",
       type: "weapon",
-      name: "Twin Laser",
-      description: "Podwójna wiązka przygotowana do przyszłego systemu uzbrojenia.",
+      name: "Shotgun",
+      description: "Trzy pociski w szerokim stożku; wolniejsza, ale mocna z bliska.",
       price: 1000
     },
     {
       id: "weapon-plasma-shot",
       category: "Starting Weapons",
       type: "weapon",
-      name: "Plasma Shot",
-      description: "Ciężki pocisk plazmowy planowany dla późniejszej wersji gry.",
+      name: "Lightning Strike",
+      description: "Automatycznie razi najbliższy cel w zasięgu natychmiastowym wyładowaniem.",
       price: 1500
     },
     {

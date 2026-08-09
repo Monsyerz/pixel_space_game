@@ -20,16 +20,18 @@
     };
   }
 
-  function createPlayerBullet(player, offset, spread) {
+  function createPlayerProjectile(player, weapon, angle = 0) {
     return {
       x: player.x,
       y: player.y - 18,
-      vx: Math.sin(offset * spread) * 360,
-      vy: -560,
-      w: 4,
-      h: 10,
-      damage: 1,
-      homing: player.aim
+      vx: Math.sin(angle) * weapon.projectileSpeed,
+      vy: -Math.cos(angle) * weapon.projectileSpeed,
+      w: weapon.projectileWidth,
+      h: weapon.projectileHeight,
+      damage: weapon.damage,
+      color: weapon.projectileColor,
+      life: weapon.projectileLife,
+      homing: 0
     };
   }
 
@@ -120,7 +122,7 @@
     createEnemyBullet,
     createParticle,
     createPlayer,
-    createPlayerBullet,
+    createPlayerProjectile,
     hit
   });
 })(window);

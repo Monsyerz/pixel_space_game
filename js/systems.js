@@ -91,14 +91,13 @@
     function update(dt) {
       const elapsed = Number.isFinite(dt) ? Math.max(0, dt) : 0;
       metrics.survivalTime += elapsed;
-      metrics.difficulty = Math.min(
-        ENDLESS_BALANCE.maximumDifficulty,
-        1 + metrics.survivalTime * ENDLESS_BALANCE.difficultyGrowthRate
-      );
-
       const distanceRate = ENDLESS_BALANCE.baseDistanceRate
         + (metrics.difficulty - 1) * ENDLESS_BALANCE.distanceDifficultyBonus;
       metrics.distance += distanceRate * elapsed;
+      metrics.difficulty = Math.min(
+        ENDLESS_BALANCE.maximumDifficulty,
+        1 + metrics.distance / ENDLESS_BALANCE.distancePerDifficulty
+      );
       updateSettings();
     }
 
